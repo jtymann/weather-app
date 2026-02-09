@@ -1,5 +1,7 @@
 import OpenWeatherMap from "openweathermap-ts"
 import { LRUCache } from "lru-cache"
+import { RawForecast, RawForecastSegment, DailyForecast, HourlyForecast, CityForecast } from "./weather.d"
+import { parse } from "path";
 
 /*
     For purposes of this app we are using a simple LRU cache as
@@ -13,74 +15,11 @@ const cacheConfig = {
 };
 
 const weatherConfig = {
-    apiKey: process.env.OPEN_WEATHER_API_KEY // TODO Set to env var before commiting
-};
-
-type ForecastDay = {
-    coord: {
-        lon: number;
-        lat: number;
-    };
-    weather: {
-        id: number;
-        main: string;
-        description: string;
-        icon: string;
-    }[];
-    base: string;
-    main: {
-        temp: number;
-        feels_like: number;
-        temp_min: number;
-        temp_max: number;
-        pressure: number;
-        humidity: number;
-    };
-    visibility: number;
-    wind: {
-        speed: number;
-        deg: number;
-    };
-    clouds: {
-        all: number;
-    };
-    dt: number;
-    sys: {
-        type: number;
-        id: number;
-        country: string;
-        sunrise: number;
-        sunset: number;
-    };
-    timezone: number;
-    id: number;
-    name: string;
-    cod: number;
-}
-
-type Forecast = {
-    cod: number;
-    message: number;
-    cnt: number;
-    list: Array<ForecastDay>;
-    city: {
-        id: number;
-        name: string;
-        coord: {
-            lat: number;
-            lon: number;
-        }
-        country: string;
-        population: number;
-        timezone: number;
-        sunrise: number;
-        sunset: number;
-    }
-
+    apiKey: process.env.OPEN_WEATHER_API_KEY as string
 };
 
 class WeatherService {
-    cache:LRUCache<number, Forecast>;
+    cache:LRUCache<number, RawForecast>;
     weatherAPI:OpenWeatherMap;
 
     constructor() {
@@ -88,16 +27,66 @@ class WeatherService {
         this.weatherAPI = new OpenWeatherMap(weatherConfig);
     }
 
-    async getForecastForZip(zipCode:number):Promise<Forecast> {
-        const cachedValue = this.cache.get(zipCode);
-        if(cachedValue) {
-            return cachedValue;
-        } else {
-            const fetchedValue = await this.weatherAPI.getByZipcode(zipCode, "forecast") as Forecast;
-            this.cache.set(zipCode, fetchedValue);
-            return fetchedValue;
+    async getForecastForZip(zipCode:number):Promise<CityForecast> {
+        let rawForecast = this.cache.get(zipCode);
+        if(!rawForecast) {
+            rawForecast = await this.weatherAPI.getByZipcode(zipCode, "forecast") as RawForecast;
+            this.cache.set(zipCode, rawForecast);
         }
+
+        return this.parseRawForecast(rawForecast);
+    }
+
+    parseRawForecast(raw: RawForecast): CityForecast {
+        const parsed: CityForecast = {
+            name: raw.city.name,
+            daily: new Array<DailyForecast>()
+        };
+
+        const dayMap = new Map<string, DailyForecast>();
+
+        raw.list.forEach((hour) => {
+            const date = new Date(hour.dt * 1000);
+            let timeZone = "";
+            if(raw.city.timezone >= 0){
+                timeZone += "+";
+            } else {
+                timeZone += "-";
+            }
+            timeZone += `${("00" + Math.min(Math.abs(raw.city.timezone)/(60*60))).slice(-2)}:${("00"+Math.min(Math.abs(raw.city.timezone)/60)%60).slice(-2)}`;
+            const dateKey = date.toLocaleDateString('en-US', {timeZone});
+
+            let day = dayMap.get(dateKey);
+            if(!day){
+                day = {
+                    date,
+                    timeZone,
+                    temp: 0,
+                    highTemp: 0,
+                    lowTemp: 0,
+                    pop: 0,
+                    icon: 'someUrl',
+                    hourly: new Array<HourlyForecast>()
+                } as DailyForecast 
+                dayMap.set(dateKey, day);
+                parsed.daily.push(day);
+            }
+
+            day.hourly.push({
+                time: date,
+                timeZone,
+                temp: hour.main.temp,
+                highTemp: hour.main.temp_max,
+                lowTemp: hour.main.temp_min,
+                pop: 0,
+                icon: hour.weather[0].icon
+            } as HourlyForecast);
+
+        });
+
+        return parsed;
     }
 }
 
 export default new WeatherService();
+export type {DailyForecast, HourlyForecast, CityForecast};
