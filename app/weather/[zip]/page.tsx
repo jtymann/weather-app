@@ -11,10 +11,9 @@ export default async function Page({
  
   return (
     <div>
-      <main>
-        <div className="flex flex-col min-w-screen justify-center items-center">
-          <h1 className="text-3xl font-bold underline grow">Weather for {forecast.name}</h1>
-          <div className="flex">
+      <main className="flex flex-col min-w-screen justify-center items-center">
+          <h1 className="text-3xl font-bold underline grow mt-10 mb-10">Weather for {forecast.name}</h1>
+          <div className="grid grid-cols-1 lg:grid-cols-5 md:grid-cols-3 ">
             {
               forecast.daily.map((daily, index) => {
                 if(index < 5){
@@ -23,8 +22,6 @@ export default async function Page({
               })
             }
           </div>
-        </div>
-
       </main>
     </div>
   )

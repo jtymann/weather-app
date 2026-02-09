@@ -25,6 +25,7 @@ class WeatherService {
     constructor() {
         this.cache = new LRUCache(cacheConfig);
         this.weatherAPI = new OpenWeatherMap(weatherConfig);
+        this.weatherAPI.setUnits("imperial")
     }
 
     async getForecastForZip(zipCode:number):Promise<CityForecast> {
