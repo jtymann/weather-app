@@ -20,12 +20,23 @@ const weatherConfig = {
 
 class WeatherService {
     cache:LRUCache<number, RawForecast>;
+    currentWeatherCache:LRUCache<number, RawForecastSegment>;
     weatherAPI:OpenWeatherMap;
 
     constructor() {
         this.cache = new LRUCache(cacheConfig);
+        this.currentWeatherCache = new LRUCache(cacheConfig);
         this.weatherAPI = new OpenWeatherMap(weatherConfig);
         this.weatherAPI.setUnits("imperial")
+    }
+
+    async getCurrentWeatherForZip(zipCode:number):Promise<RawForecastSegment> {
+        let currentWeather = this.currentWeatherCache.get(zipCode);
+        if(!currentWeather) {
+            currentWeather = await this.weatherAPI.getByZipcode(zipCode, "weather") as RawForecastSegment;
+            this.currentWeatherCache.set(zipCode, currentWeather);
+        }
+        return currentWeather;
     }
 
     async getForecastForZip(zipCode:number):Promise<CityForecast> {
@@ -90,4 +101,4 @@ class WeatherService {
 }
 
 export default new WeatherService();
-export type {DailyForecast, HourlyForecast, CityForecast};
+export type {DailyForecast, HourlyForecast, CityForecast, RawForecastSegment};
